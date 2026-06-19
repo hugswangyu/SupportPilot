@@ -109,7 +109,7 @@ def main():
     dataset_path = ROOT / args.dataset if not Path(args.dataset).is_absolute() else Path(args.dataset)
 
     print("=" * 78)
-    print("  并夕夕 · Agent 评估体系")
+    print("  电商平台 · Agent 评估体系")
     print(f"  模式      : {args.mode}")
     print(f"  数据集    : {dataset_path}")
     print(f"  LLM judge : {'开启' if args.judge else '关闭（仅规则）'}")

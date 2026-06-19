@@ -61,7 +61,7 @@ def main():
     backend, target_desc = _build_backend(args.backend)
 
     print("=" * 60)
-    print("  并夕夕 · 知识库索引构建")
+    print("  电商平台 · 知识库索引构建")
     print(f"  后端      : {args.backend}")
     print(f"  源目录    : {kb_dir}")
     print(f"  索引目标  : {target_desc}")

@@ -23,7 +23,7 @@ def _generate_mock_product(keyword: str) -> dict:
         "category": keyword,
         "price": price,
         "stock": random.randint(10, 200),
-        "description": f"并夕夕精选{keyword}，品质保证，支持七天无理由退换",
+        "description": f"电商平台精选{keyword}，品质保证，支持七天无理由退换",
         "specs": {"备注": "模拟商品数据"},
     }
 

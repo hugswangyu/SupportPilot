@@ -54,6 +54,7 @@ class EcomAgent:
             from app.agent.tools.skill_tool import set_skill_manager
             set_skill_manager(self.skill_manager)
 
+        self._trace_callback = None
         self.raw_messages: list[dict] = []
         self.summary: Optional[str] = None
 
@@ -68,8 +69,9 @@ class EcomAgent:
     def history_size(self) -> int:
         return len(self.raw_messages)
 
-    def chat(self, user_input: str) -> CustomerServiceResponse:
+    def chat(self, user_input: str, trace_callback=None) -> CustomerServiceResponse:
         """处理用户输入：ReAct 循环 → 结构化提取 → 返回结果"""
+        self._trace_callback = trace_callback
         self.raw_messages.append({"role": "user", "content": user_input})
 
         final_text = self._react_loop()
@@ -89,6 +91,7 @@ class EcomAgent:
             self.session_path, self.raw_messages, self.summary,
             short_term_memory=self.memory_manager.stm_to_dict(),
         )
+        self._trace_callback = None
         return result
 
     def reset(self):
@@ -262,12 +265,18 @@ class EcomAgent:
         )
 
     def _print_thought(self, text: str) -> None:
+        if self._trace_callback:
+            self._trace_callback({"type": "thought", "content": text})
         print(f"\n💭 [思考] {text}")
 
     def _print_action(self, func_name: str, func_args: dict) -> None:
+        if self._trace_callback:
+            self._trace_callback({"type": "tool_call", "name": func_name, "args": func_args})
         args_str = ", ".join(f"{k}={v!r}" for k, v in func_args.items())
         print(f"🔧 [调用工具] {func_name}({args_str})")
 
     def _print_observation(self, result: str) -> None:
+        if self._trace_callback:
+            self._trace_callback({"type": "tool_result", "content": result})
         display = result if len(result) <= 300 else result[:300] + "..."
         print(f"📋 [工具结果] {display}")

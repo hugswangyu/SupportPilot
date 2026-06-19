@@ -1,6 +1,6 @@
 # SupportPilot — 电商智能客服系统
 
-一个基于 OpenAI + ReAct + RAG + MCP + Multi-Agent + Memory + Skill 的电商客服 Agent，模拟"并夕夕"平台的智能客服「小夕」。
+一个基于 OpenAI + ReAct + RAG + MCP + Multi-Agent + Memory + Skill 的电商客服 Agent，提供完整的智能客服「客服机器人」能力。
 
 ## 核心特性
 
@@ -13,17 +13,21 @@
 | **Memory 记忆** | 短期记忆（本次对话摘要）+ 长期记忆（跨会话用户偏好持久化） |
 | **Skill 技能** | 可插拔技能模块，Agent 可按需编排复用能力 |
 | **Evaluation** | LLM-as-Judge 离线评测框架，自动化质量/幻觉/过程合理性打分 |
+| **Web UI** | FastAPI + SSE 流式接口，配套莫兰迪风格聊天前端 |
 
 ## 项目结构
 
 ```
 SupportPilot/
 ├── main.py                    # 入口：交互式命令行
+├── api.py                     # FastAPI 服务（端口 8000）
+├── static/
+│   └── index.html             # 聊天 Web UI（单文件）
 ├── app/
 │   ├── agent/
 │   │   ├── chat.py            # EcomAgent：单 Agent ReAct 主循环
 │   │   ├── tools/             # 工具集：订单/物流/商品/退款/知识库/记忆/技能
-│   │   ├── memory.py          # 短期 + 长期记忆管理
+│   │   ├── memory/            # 短期 + 长期记忆管理
 │   │   ├── skills/            # 可插拔技能定义
 │   │   └── rag/               # 向量检索（Numpy/ChromaDB）
 │   ├── multi_agent/
@@ -42,9 +46,11 @@ SupportPilot/
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 创建环境并安装依赖
 
 ```bash
+conda create -n supportpilot python=3.11 -y
+conda activate supportpilot
 pip install -r requirements.txt
 ```
 
@@ -61,13 +67,20 @@ cp .env.example .env
 python app/scripts/build_kb_index.py
 ```
 
-### 4. 启动客服对话
+### 4a. 启动 Web UI（推荐）
+
+```bash
+uvicorn api:app --reload --port 8000
+# 浏览器访问 http://localhost:8000
+```
+
+### 4b. 或使用命令行对话
 
 ```bash
 python main.py
 ```
 
-启动后支持以下命令：
+命令行支持以下指令：
 
 | 命令 | 功能 |
 |------|------|
@@ -75,6 +88,16 @@ python main.py
 | `memory` | 查看短期/长期记忆 |
 | `skills` | 查看已加载的技能列表 |
 | `quit` / `exit` | 退出并保存会话 |
+
+## Web API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/chat` | SSE 流式对话（思考过程实时推送） |
+| `POST` | `/api/reset` | 重置会话 |
+| `GET` | `/api/session` | 当前会话信息 |
+| `GET` | `/api/memory` | 短期/长期记忆 |
+| `GET` | `/api/skills` | 已加载技能列表 |
 
 ## 运行模式
 
@@ -111,8 +134,8 @@ MCP_SERVER_URL=http://127.0.0.1:9123/mcp
 
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
-| `OPENAI_API_KEY` | — | OpenAI API Key（必填） |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | API 代理地址 |
+| `OPENAI_API_KEY` | — | API Key（必填） |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | API 地址（支持第三方兼容接口） |
 | `MODEL_NAME` | `gpt-4o-mini` | 模型名称 |
 | `TEMPERATURE` | `0.7` | 生成温度 |
 | `RAG_BACKEND` | `numpy` | 向量后端：`numpy` / `chroma` |
@@ -139,7 +162,8 @@ python -m pytest tests/ -v
 
 ## 技术栈
 
-- **LLM**: OpenAI GPT 系列（通过 OpenAI Python SDK）
+- **LLM**: OpenAI SDK（兼容 DeepSeek、Moonshot 等第三方接口）
+- **Web 框架**: FastAPI + SSE 流式推送
 - **向量检索**: Numpy（余弦相似度）/ ChromaDB
 - **MCP**: `mcp>=1.8.0`（FastMCP Streamable HTTP）
 - **数据校验**: Pydantic v2

@@ -52,7 +52,7 @@ def apply_refund(order_id: str, reason: str) -> str:
 
 @mcp.tool()
 def search_knowledge(query: str, top_k: int = 3) -> str:
-    """检索并夕夕的政策与帮助文档（退换货政策、配送说明、会员权益、FAQ）。
+    """检索电商平台的政策与帮助文档（退换货政策、配送说明、会员权益、FAQ）。
     当顾客询问规则、流程、时效、是否支持等政策类问题时使用。
     返回 Top-K 命中片段及来源文档，请基于检索结果回答，不要编造政策。
     """
