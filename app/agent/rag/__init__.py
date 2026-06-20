@@ -4,7 +4,7 @@
 非结构化知识回答问题，而不只依赖工具返回的结构化数据。
 """
 
-from app.agent.rag.backends import NumpyBackend, RetrievedChunk, VectorBackend, create_backend
+from app.agent.rag.backends import ChromaBackend, RetrievedChunk, VectorBackend, create_backend
 from app.agent.rag.chunker import Chunk, chunk_markdown_dir
 from app.agent.rag.embedder import Embedder
 from app.agent.rag.retriever import KnowledgeRetriever
@@ -16,6 +16,6 @@ __all__ = [
     "KnowledgeRetriever",
     "RetrievedChunk",
     "VectorBackend",
-    "NumpyBackend",
+    "ChromaBackend",
     "create_backend",
 ]

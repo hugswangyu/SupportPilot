@@ -1,44 +1,47 @@
-"""向量化封装：调用 OpenAI Embeddings 接口。
+"""本地向量化封装：使用 sentence-transformers 加载 BGE 系列模型。
 
-- 支持批量编码（list[str] → list[list[float]]）。
-- 可配置 model 与 base_url（与 chat 模型共用一套 OpenAI 客户端配置）。
-- 返回原始 list[float]，由调用方决定如何持久化（这里用 json，不引入 numpy 依赖）。
+BGE 模型在检索场景下需要对 query 加指令前缀（passages 不需要）：
+- encode()     用于文档入库，不加前缀
+- encode_one() 用于查询向量化，自动加前缀
 """
 
 from typing import Iterable
 
-from openai import OpenAI
-
 
 class Embedder:
-    """OpenAI Embeddings 同步封装。"""
+    def __init__(self, model_name: str = "BAAI/bge-small-zh-v1.5", batch_size: int = 64):
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise ImportError(
+                "sentence-transformers 未安装。请运行 `pip install sentence-transformers`。"
+            ) from e
 
-    def __init__(
-        self,
-        api_key: str,
-        base_url: str,
-        model: str = "text-embedding-3-small",
-        batch_size: int = 64,
-    ):
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
-        self._model = model
+        self._model = SentenceTransformer(model_name)
+        self._model_name = model_name
         self._batch_size = batch_size
+        # BGE 系列 query 需要加检索指令，passage 不需要
+        self._query_instruction = "为这个句子生成表示以用于检索相关文章：" if "bge" in model_name.lower() else ""
 
     @property
     def model(self) -> str:
-        return self._model
+        return self._model_name
 
     def encode(self, texts: Iterable[str]) -> list[list[float]]:
-        """批量编码，自动按 batch_size 分批请求。"""
+        """批量编码文档（入库用），不加 query 前缀。"""
         texts = list(texts)
         if not texts:
             return []
-        out: list[list[float]] = []
-        for i in range(0, len(texts), self._batch_size):
-            batch = texts[i : i + self._batch_size]
-            resp = self._client.embeddings.create(model=self._model, input=batch)
-            out.extend(item.embedding for item in resp.data)
-        return out
+        vecs = self._model.encode(
+            texts,
+            batch_size=self._batch_size,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        return vecs.tolist()
 
     def encode_one(self, text: str) -> list[float]:
+        """编码单条 query，自动加 BGE 检索指令前缀。"""
+        if self._query_instruction:
+            text = self._query_instruction + text
         return self.encode([text])[0]

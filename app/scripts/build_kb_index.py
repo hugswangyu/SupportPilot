@@ -1,20 +1,14 @@
-"""离线构建知识库向量索引。
+"""离线构建知识库向量索引（ChromaDB）。
 
 用法：
-  # 默认走 settings.rag_backend
   python app/scripts/build_kb_index.py
-
-  # 显式指定后端，便于一份知识库同时构建两种后端的索引做对比
-  python app/scripts/build_kb_index.py --backend numpy
-  python app/scripts/build_kb_index.py --backend chroma
 
 流程：
   1. 扫描 knowledge/ 下的所有 .md 文件，按二级标题切分。
   2. 调用 OpenAI Embeddings 将每个 chunk 向量化。
-  3. 通过 backend.upsert 持久化索引（NumpyBackend 写 JSON / ChromaBackend 写 PersistentClient）。
+  3. 写入 ChromaDB PersistentClient（HNSW 索引）。
 """
 
-import argparse
 import sys
 from pathlib import Path
 
@@ -27,44 +21,22 @@ from app.agent.rag.chunker import chunk_markdown_dir  # noqa: E402
 from app.agent.rag.embedder import Embedder  # noqa: E402
 
 
-def _build_backend(name: str):
-    if name == "numpy":
-        return create_backend(
-            "numpy",
-            index_path=ROOT / settings.kb_index_path,
-        ), str(ROOT / settings.kb_index_path)
-    if name == "chroma":
-        return create_backend(
-            "chroma",
-            persist_dir=ROOT / settings.chroma_persist_dir,
-            collection_name=settings.chroma_collection,
-        ), f"{ROOT / settings.chroma_persist_dir} (collection={settings.chroma_collection})"
-    raise ValueError(f"未知后端: {name}")
-
-
 def main():
-    parser = argparse.ArgumentParser(description="构建知识库向量索引")
-    parser.add_argument(
-        "--backend",
-        choices=["numpy", "chroma"],
-        default=settings.rag_backend,
-        help=f"向量后端（默认: {settings.rag_backend}）",
-    )
-    args = parser.parse_args()
-
     kb_dir = ROOT / settings.kb_dir
 
     if not kb_dir.exists():
         print(f"❌ 知识库目录不存在: {kb_dir}")
         sys.exit(1)
 
-    backend, target_desc = _build_backend(args.backend)
+    backend = create_backend(
+        persist_dir=ROOT / settings.chroma_persist_dir,
+        collection_name=settings.chroma_collection,
+    )
 
     print("=" * 60)
-    print("  电商平台 · 知识库索引构建")
-    print(f"  后端      : {args.backend}")
+    print("  电商平台 · 知识库索引构建（ChromaDB）")
     print(f"  源目录    : {kb_dir}")
-    print(f"  索引目标  : {target_desc}")
+    print(f"  索引目录  : {ROOT / settings.chroma_persist_dir}")
     print(f"  Embedding : {settings.embedding_model}")
     print("=" * 60)
 
@@ -82,16 +54,12 @@ def main():
     print(f"   合计 {len(chunks)} 个 chunk")
 
     print(f"\n[2/3] 调用 {settings.embedding_model} 批量向量化...")
-    embedder = Embedder(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
-        model=settings.embedding_model,
-    )
+    embedder = Embedder(model_name=settings.embedding_model)
     vectors = embedder.encode([c.text for c in chunks])
     dim = len(vectors[0]) if vectors else 0
     print(f"   完成，向量维度 = {dim}")
 
-    print(f"\n[3/3] 写入 {args.backend} 索引...")
+    print("\n[3/3] 写入 ChromaDB 索引...")
     backend.upsert(
         chunks=chunks,
         vectors=vectors,

@@ -4,10 +4,7 @@
 search_knowledge 面向非结构化文本（退换货政策、配送说明、FAQ 等），
 返回 Top-K 命中片段及其来源，由 LLM 引用回答。
 
-向量后端由 settings.rag_backend 切换：
-- numpy ：手写余弦相似度，零依赖，教学透明
-- chroma：嵌入式向量数据库，HNSW 索引，工程代表性
-
+使用 ChromaDB 嵌入式向量数据库（HNSW 索引）。
 为避免每次进程启动都重建索引，单例缓存 Retriever。
 """
 
@@ -23,29 +20,16 @@ _retriever: Optional[KnowledgeRetriever] = None
 
 
 def _create_backend_from_settings():
-    """根据 settings.rag_backend 创建对应后端实例。"""
-    name = settings.rag_backend.lower()
-    if name == "numpy":
-        return create_backend("numpy", index_path=Path(settings.kb_index_path))
-    if name == "chroma":
-        return create_backend(
-            "chroma",
-            persist_dir=Path(settings.chroma_persist_dir),
-            collection_name=settings.chroma_collection,
-        )
-    raise ValueError(
-        f"未知的 RAG 后端: {settings.rag_backend}（可选: numpy / chroma）"
+    return create_backend(
+        persist_dir=Path(settings.chroma_persist_dir),
+        collection_name=settings.chroma_collection,
     )
 
 
 def _get_retriever() -> KnowledgeRetriever:
     global _retriever
     if _retriever is None:
-        embedder = Embedder(
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
-            model=settings.embedding_model,
-        )
+        embedder = Embedder(model_name=settings.embedding_model)
         backend = _create_backend_from_settings()
         _retriever = KnowledgeRetriever(embedder=embedder, backend=backend)
         _retriever.load()
@@ -64,7 +48,7 @@ def search_knowledge(query: str, top_k: int = 3) -> dict:
     Returns:
         {
           "success": bool,
-          "backend": "numpy" | "chroma",
+          "backend": "chroma",
           "query": str,
           "results": [
             {"doc": "...", "section": "...", "score": 0.83, "text": "..."},
@@ -82,7 +66,7 @@ def search_knowledge(query: str, top_k: int = 3) -> dict:
         return {
             "success": False,
             "error": str(e),
-            "backend": settings.rag_backend,
+            "backend": "chroma",
             "query": query,
             "results": [],
         }
@@ -90,7 +74,7 @@ def search_knowledge(query: str, top_k: int = 3) -> dict:
         return {
             "success": False,
             "error": f"知识库初始化失败: {e}",
-            "backend": settings.rag_backend,
+            "backend": "chroma",
             "query": query,
             "results": [],
         }
@@ -100,7 +84,7 @@ def search_knowledge(query: str, top_k: int = 3) -> dict:
 
     return {
         "success": True,
-        "backend": settings.rag_backend,
+        "backend": "chroma",
         "query": query,
         "results": [
             {

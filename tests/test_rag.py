@@ -1,22 +1,15 @@
-"""端到端测试：验证第 5 期 RAG 知识库检索（两套后端）。
+"""端到端测试：验证 RAG 知识库检索（ChromaDB 后端）。
 
-测试场景（每套后端独立跑一遍）：
+测试场景：
 1. Markdown 切分正确性。
 2. 索引构建（首次会调用 OpenAI Embeddings；已存在且模型一致则复用）。
 3. KnowledgeRetriever Top-K 召回，与预期 doc 命中。
 4. search_knowledge 工具返回结构。
 5. Agent 端到端：政策类问题触发 search_knowledge。
 
-前提：已配置 OPENAI_API_KEY；chroma 后端需要 `pip install chromadb`。
-
-用法：
-  python tests/test_rag.py                # 跑两套后端
-  python tests/test_rag.py --backend numpy
-  python tests/test_rag.py --backend chroma
+前提：已配置 OPENAI_API_KEY；需要 `pip install chromadb`。
 """
 
-import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -50,23 +43,14 @@ def _clean_session():
 
 
 def _make_embedder() -> Embedder:
-    return Embedder(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
-        model=settings.embedding_model,
+    return Embedder(model_name=settings.embedding_model)
+
+
+def _make_backend():
+    return create_backend(
+        persist_dir=ROOT / settings.chroma_persist_dir,
+        collection_name=settings.chroma_collection,
     )
-
-
-def _make_backend(backend_name: str):
-    if backend_name == "numpy":
-        return create_backend("numpy", index_path=ROOT / settings.kb_index_path)
-    if backend_name == "chroma":
-        return create_backend(
-            "chroma",
-            persist_dir=ROOT / settings.chroma_persist_dir,
-            collection_name=settings.chroma_collection,
-        )
-    raise ValueError(backend_name)
 
 
 # ---------- 测试 1：切分 ----------
@@ -86,10 +70,10 @@ def test_chunker():
 
 
 # ---------- 测试 2：构建/复用索引 ----------
-def test_build_index(backend_name: str):
-    print(f"\n  [2/5] 构建/加载向量索引（backend={backend_name}）")
+def test_build_index():
+    print("\n  [2/5] 构建/加载向量索引")
     embedder = _make_embedder()
-    backend = _make_backend(backend_name)
+    backend = _make_backend()
 
     try:
         backend.load()
@@ -110,10 +94,10 @@ def test_build_index(backend_name: str):
 
 
 # ---------- 测试 3：Top-K 召回 ----------
-def test_retriever_top_k(backend_name: str):
-    print(f"\n  [3/5] KnowledgeRetriever Top-K 召回（backend={backend_name}）")
+def test_retriever_top_k():
+    print("\n  [3/5] KnowledgeRetriever Top-K 召回")
     embedder = _make_embedder()
-    backend = _make_backend(backend_name)
+    backend = _make_backend()
     retriever = KnowledgeRetriever(embedder=embedder, backend=backend)
     retriever.load()
 
@@ -140,15 +124,14 @@ def test_retriever_top_k(backend_name: str):
 
 
 # ---------- 测试 4：search_knowledge 工具结构 ----------
-def test_tool_shape(backend_name: str):
-    print(f"\n  [4/5] search_knowledge 工具返回结构（backend={backend_name}）")
-    settings.rag_backend = backend_name
+def test_tool_shape():
+    print("\n  [4/5] search_knowledge 工具返回结构")
     knowledge_tool.reset_retriever()
 
     result = knowledge_tool.search_knowledge("退款多久到账", top_k=2)
     if not result.get("success"):
         _fail(f"工具调用失败: {result}")
-    if result.get("backend") != backend_name:
+    if result.get("backend") != "chroma":
         _fail(f"backend 字段不匹配: {result.get('backend')}")
     if not result.get("results"):
         _fail("results 为空")
@@ -164,9 +147,8 @@ def test_tool_shape(backend_name: str):
 
 
 # ---------- 测试 5：Agent 端到端 ----------
-def test_agent_end_to_end(backend_name: str):
-    print(f"\n  [5/5] Agent 端到端：政策类问题触发 RAG（backend={backend_name}）")
-    settings.rag_backend = backend_name
+def test_agent_end_to_end():
+    print("\n  [5/5] Agent 端到端：政策类问题触发 RAG")
     knowledge_tool.reset_retriever()
 
     _clean_session()
@@ -206,36 +188,23 @@ def test_agent_end_to_end(backend_name: str):
         _clean_session()
 
 
-def run_for_backend(backend_name: str):
-    print("\n" + "=" * 60)
-    print(f"  Backend: {backend_name}")
-    print("=" * 60)
-    test_chunker()
-    test_build_index(backend_name)
-    test_retriever_top_k(backend_name)
-    test_tool_shape(backend_name)
-    test_agent_end_to_end(backend_name)
-
-
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", choices=["numpy", "chroma", "all"], default="all")
-    args = parser.parse_args()
-
     print("=" * 60)
-    print("  第 5 期 RAG · 端到端测试")
+    print("  RAG · 端到端测试（ChromaDB）")
     print("=" * 60)
 
-    backends = ["numpy", "chroma"] if args.backend == "all" else [args.backend]
     try:
-        for name in backends:
-            run_for_backend(name)
+        test_chunker()
+        test_build_index()
+        test_retriever_top_k()
+        test_tool_shape()
+        test_agent_end_to_end()
     finally:
         _clean_session()
         knowledge_tool.reset_retriever()
 
     print("\n" + "=" * 60)
-    print(f"  🎉 全部测试通过（backends: {', '.join(backends)}）")
+    print("  🎉 全部测试通过")
     print("=" * 60)
 
 
